@@ -34,6 +34,28 @@ customers = pd.read_csv("olist_customers_dataset.csv")
 # ===============================
 # STEP 4: Data Cleaning & Preparation
 # ===============================
+# Check dataset shape
+print("Dataset Shape:", monthly_sales.shape)
+
+# Check column names
+print("\nColumns:")
+print(monthly_sales.columns)
+
+# Check data types & null info
+print("\nDataset Info:")
+monthly_sales.info()
+# Check missing values count
+missing_values = monthly_sales.isnull().sum()
+
+print("\nMissing Values in Each Column:")
+print(missing_values)
+
+# Total missing values
+print("\nTotal Missing Values:", missing_values.sum())
+# Check duplicate rows
+duplicate_count = monthly_sales.duplicated().sum()
+print("Duplicate Rows:", duplicate_count)
+
 # Convert purchase timestamp to datetime
 orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'])
 
