@@ -205,4 +205,4 @@ interface = gr.Interface(
     description="Enter future month index to get sales prediction (Local session only)."
 )
 
-interface.launch(share=False)
+interface.launch()
