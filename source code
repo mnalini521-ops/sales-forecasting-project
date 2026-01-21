@@ -1,0 +1,162 @@
+# ===============================
+# STEP 0: Install libraries
+# ===============================
+!pip install gradio scikit-learn matplotlib
+
+# ===============================
+# STEP 1: Import libraries
+# ===============================
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import gradio as gr
+# ===============================
+# STEP 2: Upload CSV files
+# ===============================
+from google.colab import files
+uploaded = files.upload()
+# ===============================
+# STEP 3: Read CSV files
+# ===============================
+orders = pd.read_csv("olist_orders_dataset.csv")
+items = pd.read_csv("olist_order_items_dataset.csv")
+customers = pd.read_csv("olist_customers_dataset.csv")
+# ===============================
+# STEP 4: Data Cleaning
+# ===============================
+orders['order_purchase_timestamp'] = pd.to_datetime(
+    orders['order_purchase_timestamp']
+)
+
+orders = orders[orders['order_status'] == 'delivered']
+
+print("Orders cleaned ✅")
+# ===============================
+# STEP 5: Merge Datasets
+# ===============================
+sales_data = orders.merge(items, on='order_id')
+sales_data = sales_data.merge(customers, on='customer_id')
+
+sales_data['total_sales'] = sales_data['price'] + sales_data['freight_value']
+
+print("Merged dataset created ✅")
+print(sales_data.head())
+
+print(sales_data.head())
+
+# ===============================
+# STEP 5: Encoding & Scaling
+# ===============================
+
+# Select the categorical columns you want to encode
+categorical_cols = ['customer_state']  # example
+# One-Hot Encoding
+encoded_df = pd.get_dummies(sales_data[categorical_cols], drop_first=True)
+
+# Combine encoded columns with numeric data
+numeric_cols = ['total_sales']
+preprocessed_df = pd.concat([sales_data[numeric_cols], encoded_df], axis=1)
+
+# Scaling numeric features
+scaler = StandardScaler()
+preprocessed_df['total_sales_scaled'] = scaler.fit_transform(preprocessed_df[['total_sales']])
+
+print(preprocessed_df.head())
+# STEP 6: Machine Learning - Forecasting
+# ===============================
+
+# Features and Target
+X = preprocessed_df.drop(['total_sales'], axis=1)  # Encoded + scaled numeric features
+y = preprocessed_df['total_sales']
+
+# Train-Test Split (time series style)
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+# Linear Regression Model
+lr_model = LinearRegression()
+lr_model.fit(X_train, y_train)
+y_pred_lr = lr_model.predict(X_test)
+
+# Random Forest Regressor
+rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+rf_model.fit(X_train, y_train)
+y_pred_rf = rf_model.predict(X_test)
+# ===============================
+# STEP 7: Model Evaluation
+# ===============================
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import numpy as np
+
+def evaluate_model(y_true, y_pred, model_name):
+    print(f"--- {model_name} Evaluation ---")
+    print("MAE:", round(mean_absolute_error(y_true, y_pred), 2))
+    print("RMSE:", round(np.sqrt(mean_squared_error(y_true, y_pred)), 2))
+    print("R2 Score:", round(r2_score(y_true, y_pred), 2))
+    print("\n")
+
+evaluate_model(y_test, y_pred_lr, "Linear Regression")
+evaluate_model(y_test, y_pred_rf, "Random Forest Regressor")
+# ===============================
+# STEP 8: Visualization
+# ===============================
+
+# Actual vs Predicted
+plt.figure(figsize=(12,6))
+plt.plot(y_test.values, label="Actual Sales", marker='o', color='blue')
+plt.plot(y_pred_lr, label="Linear Regression Prediction", linestyle='--', marker='x', color='green')
+plt.plot(y_pred_rf, label="Random Forest Prediction", linestyle='-.', marker='s', color='red')
+plt.title("Actual vs Predicted Sales (Test Set)")
+plt.xlabel("Test Data Index")
+plt.ylabel("Total Sales")
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+last_index = len(preprocessed_df) - 1
+future_index = np.arange(last_index + 1, last_index + 13).reshape(-1,1)
+
+# Linear Regression Future Forecast
+future_pred_lr = lr_model.predict(np.hstack([future_index, np.zeros((12, X.shape[1]-1))]))  # zero for one-hot columns
+
+# Random Forest Future Forecast
+future_pred_rf = rf_model.predict(np.hstack([future_index, np.zeros((12, X.shape[1]-1))]))
+
+# Plot future forecast
+plt.figure(figsize=(14,6))
+width = 0.35  # width of the bars
+months = np.arange(1,13)
+
+plt.bar(months - width/2, future_pred_lr, width=width, label="Linear Regression Forecast", color='green')
+plt.bar(months + width/2, future_pred_rf, width=width, label="Random Forest Forecast", color='red')
+
+plt.title("Future Sales Forecast for Next 12 Months")
+plt.xlabel("Month Index (Next 12 Months)")
+plt.ylabel("Predicted Total Sales")
+plt.xticks(months)
+plt.legend()
+plt.grid(axis='y', alpha=0.3)
+plt.show()
+
+def predict_sales_ui(month_index):
+    input_data = np.hstack([[[len(preprocessed_df)+month_index-1]], np.zeros((1, X.shape[1]-1))])
+    lr_pred = lr_model.predict(input_data)[0]
+    rf_pred = rf_model.predict(input_data)[0]
+    return f"Linear Regression Forecast: ₹{round(lr_pred,2)}\nRandom Forest Forecast: ₹{round(rf_pred,2)}"
+
+inputs = gr.Slider(minimum=1, maximum=12, step=1, label="Month Index (1 = Next Month)")
+outputs = gr.Textbox(label="Predicted Sales", lines=2)
+
+interface = gr.Interface(
+    fn=predict_sales_ui,
+    inputs=inputs,
+    outputs=outputs,
+    title="🛒 OLIST Sales Forecast Predictor",
+    description="Enter future month index to get sales prediction (Local session only)."
+)
+
+interface.launch(share=False)  # Local session, no expiry
