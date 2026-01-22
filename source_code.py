@@ -17,13 +17,11 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import gradio as gr
 
 plt.style.use("seaborn-v0_8")
-
 # ===============================
 # STEP 2: Upload CSV files
 # ===============================
 from google.colab import files
-uploaded = files.upload()  # Upload: olist_orders_dataset.csv, olist_order_items_dataset.csv, olist_customers_dataset.csv
-
+uploaded = files.upload()
 # ===============================
 # STEP 3: Read CSV files
 # ===============================
@@ -34,28 +32,6 @@ customers = pd.read_csv("olist_customers_dataset.csv")
 # ===============================
 # STEP 4: Data Cleaning & Preparation
 # ===============================
-# Check dataset shape
-print("Dataset Shape:", monthly_sales.shape)
-
-# Check column names
-print("\nColumns:")
-print(monthly_sales.columns)
-
-# Check data types & null info
-print("\nDataset Info:")
-monthly_sales.info()
-# Check missing values count
-missing_values = monthly_sales.isnull().sum()
-
-print("\nMissing Values in Each Column:")
-print(missing_values)
-
-# Total missing values
-print("\nTotal Missing Values:", missing_values.sum())
-# Check duplicate rows
-duplicate_count = monthly_sales.duplicated().sum()
-print("Duplicate Rows:", duplicate_count)
-
 # Convert purchase timestamp to datetime
 orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'])
 
@@ -69,13 +45,35 @@ sales_data = sales_data.merge(customers, on='customer_id', how='inner')
 # Total sales per order
 sales_data['total_sales'] = sales_data['price'] + sales_data['freight_value']
 
-# Extract year-month for aggregation
+# Extract year-month
 sales_data['order_month'] = sales_data['order_purchase_timestamp'].dt.to_period('M')
+
+# Monthly aggregation
 monthly_sales = sales_data.groupby('order_month')['total_sales'].sum().reset_index()
 monthly_sales['order_month'] = monthly_sales['order_month'].astype(str)
 
-# Add month index for ML
+# Month index
 monthly_sales['month_index'] = np.arange(len(monthly_sales))
+# Check dataset shape
+print("Dataset Shape:", monthly_sales.shape)
+
+# Check column names
+print("\nColumns:")
+print(monthly_sales.columns)
+
+# Dataset info
+print("\nDataset Info:")
+monthly_sales.info()
+
+# Missing values
+missing_values = monthly_sales.isnull().sum()
+print("\nMissing Values:")
+print(missing_values)
+
+print("\nTotal Missing Values:", missing_values.sum())
+
+# Duplicate rows
+print("Duplicate Rows:", monthly_sales.duplicated().sum())
 
 # ===============================
 # STEP 5: Data Visualization
@@ -92,11 +90,18 @@ plt.show()
 # 2. Heatmap: Year vs Month
 monthly_sales['year'] = monthly_sales['order_month'].str[:4]
 monthly_sales['month'] = monthly_sales['order_month'].str[5:7].astype(int)
-pivot = monthly_sales.pivot("month", "year", "total_sales")
+
+pivot = monthly_sales.pivot(
+    index="month",
+    columns="year",
+    values="total_sales"
+)
+
 plt.figure(figsize=(10,6))
 sns.heatmap(pivot, annot=True, fmt=".0f", cmap="YlGnBu")
 plt.title("Monthly Sales Heatmap (Year vs Month)")
 plt.ylabel("Month")
+plt.xlabel("Year")
 plt.show()
 
 # 3. Rolling average trend
